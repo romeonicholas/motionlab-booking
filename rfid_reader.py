@@ -1,7 +1,10 @@
-from mfrc522 import MFRC522
 import utime
 import network
 import urequests
+#import sys
+import os
+
+from mfrc522 import MFRC522
 
 import secrets
 
@@ -77,6 +80,13 @@ def create_formatted_time_string(unformatted_time):
                                             unformatted_time[3],
                                             unformatted_time[4])
 
+def file_or_dir_exists(filename):
+    try:
+        os.stat(filename)
+        return True
+    except OSError:
+        return False
+
 ## API FUNCTIONS ##
 
 #Returns membership id from check-in token 
@@ -98,7 +108,7 @@ def get_membership_id(user_checkin_token, access_token):
             print("Getting member ID did not return 200")
             print(request.status_code)
             print(request.json())
-    except:
+    except Exception as e:
         print("Error in getting member ID: ", e)
         
     return membership_id
@@ -220,9 +230,9 @@ def end_booking(booking_id, access_token):
                                 json=data)
         if request.status_code == 200:
             updated_booking = request.json()
-            print("Successfully ended booking early: {}".format(request.json()))
+            print("Successfully ended booking early: {}\n".format(request.json()))
         elif request.status_code == 422:
-            print("Ending booking early failed")
+            print("Ending booking early failed\n")
     except Exception as e:
             print("Error: ", e)
     return updated_booking
@@ -233,11 +243,42 @@ def delete_booking(booking_id, access_token):
                                 + booking_id + "/?access_token="
                                 + access_token)
         if request.status_code == 204:
-            print("Successfully deleted booking within 5 minutes of creation")
+            print("Successfully deleted booking within 5 minutes of creation\n")
         elif request.status_code == 409:
-            print("Cannot delete bookings made by an event through this endpoint")
+            print("Cannot delete bookings made by an event through this endpoint\n")
     except Exception as e:
             print("Error: ", e)
+
+def configure_device():
+    print("Please answer the following questions to generate an OAUTH token for this client.")
+    print("None of your entered data will be stored locally, it will be deleted as soon as a token is generated.\n")
+    
+    print("Please enter the booking program's client ID (from https://www.cobot.me/oauth2_clients)")
+    client_id = input()
+    
+    print("\nPlease enter the booking program's client secret (from https://www.cobot.me/oauth2_clients)")
+    client_secret = input()
+
+    print("\nPlease enter your MotionLab admin account email")
+    admin_email = input()
+    
+    print("\nPlease enter your MotionLab admin account password")
+    admin_password = input()
+    print("")
+    
+    full_oauth_token = Tokens(
+        client_id,
+        client_secret,
+        "checkin_tokens,read_bookings,write_bookings",
+        admin_email,
+        admin_password
+    )
+    
+    token_file = open('token.txt', 'w')
+    token_file.write(full_oauth_token.access_token)
+    token_file.close()
+    
+    return full_oauth_token.access_token
 
 ###STARTUP###
 
@@ -255,14 +296,17 @@ while not wlan.isconnected():
 print("Connected to WiFi")
 print("")
 
-#Generate OAuth token for API calls
-OAUTH_TOKEN = Tokens(
-    secrets.CLIENT_ID,
-    secrets.CLIENT_SECRET,
-    "checkin_tokens,read_bookings,write_bookings",
-    secrets.USER,
-    secrets.USER_PASSWORD
-)
+OAUTH_TOKEN = ""
+
+#On first boot no token exists, run through configuration
+if not file_or_dir_exists("token.txt"):
+    print("*** First boot, configuring device ***")
+    OAUTH_TOKEN = configure_device()
+else:
+    #Already configured, read from file to get OAUTH token
+    f = open("token.txt")
+    OAUTH_TOKEN = f.read()
+    f.close()    
 
 #Set up RFID reader with specific I/O
 reader = MFRC522(spi_id=0, sck=2, miso=4, mosi=3, cs=1, rst=0)
@@ -271,7 +315,7 @@ reader = MFRC522(spi_id=0, sck=2, miso=4, mosi=3, cs=1, rst=0)
 previous_card = [0]
 
 #Used to determine whether a booking is currently active at startup
-current_booking = get_current_booking(secrets.RESOURCE_ID, OAUTH_TOKEN.access_token)
+current_booking = get_current_booking(secrets.RESOURCE_ID, OAUTH_TOKEN)
 
 #Timer for cancelling booking, initalize at startup so ongoing bookings can be canceled after reboot
 onsite_booking_creation_time = utime.ticks_ms()
@@ -302,7 +346,7 @@ try:
         if current_booking == {}:
             if (utime.ticks_diff(time_now, availability_update_timer_start) > TIMER_MS):
                 #enough time has passed to check for availability again
-                current_booking = get_current_booking(secrets.RESOURCE_ID, OAUTH_TOKEN.access_token)
+                current_booking = get_current_booking(secrets.RESOURCE_ID, OAUTH_TOKEN)
                 availability_update_timer_start = time_now
 
         reader.init()
@@ -324,7 +368,7 @@ try:
                     membership_id = last_user_token_and_id[user_checkin_token]
                     print("Membership ID was already locally available: {}\n".format(membership_id))
                 else:
-                    membership_id = get_membership_id(user_checkin_token, OAUTH_TOKEN.access_token)
+                    membership_id = get_membership_id(user_checkin_token, OAUTH_TOKEN)
                     last_user_token_and_id = {
                         user_checkin_token: membership_id,
                         }
@@ -334,7 +378,7 @@ try:
                     #Resource is available, create booking for user starting now for default length
                     current_booking = create_booking(
                         membership_id,
-                        OAUTH_TOKEN.access_token,
+                        OAUTH_TOKEN,
                         secrets.RESOURCE_ID,
                     )
                     
@@ -356,9 +400,9 @@ try:
                         else:
                             if (utime.ticks_diff(time_now, onsite_booking_creation_time) < TIMER_MS):
                                 #Booking is less than 5 minutes old
-                                delete_booking(current_booking["id"], OAUTH_TOKEN.access_token)
+                                delete_booking(current_booking["id"], OAUTH_TOKEN)
                             else:
-                                end_booking(current_booking["id"], OAUTH_TOKEN.access_token)
+                                end_booking(current_booking["id"], OAUTH_TOKEN)
 
                             #Reset status of booking device
                             current_booking = {}
