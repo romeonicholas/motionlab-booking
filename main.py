@@ -19,42 +19,6 @@ logger = logging.getLogger("main_logger")
 
 led = Pin("LED", machine.Pin.OUT)
 
-### CLASSES ###
-
-#Access tokens required for interacting with the Cobot API
-class Tokens:
-    def __init__(self, client_id, client_secret, scope, usr, pwd):
-        self.id = client_id
-        self.secret = client_secret
-        self.scope = scope
-        self.usr = usr
-        self.pwd = pwd
-        
-        print("Attempting to retrieve Token with scope: %s",(scope))
-
-        try:
-            request = urequests.post(
-                "https://www.cobot.me/oauth/access_token?scope="
-                + self.scope
-                + "&grant_type=password&username="
-                + self.usr
-                + "&password="
-                + self.pwd
-                + "&client_id="
-                + self.id
-                + "&client_secret="
-                + self.secret
-            ) 
-            if request.status_code == 200:
-                self.access_token = request.json()["access_token"]
-                print("Successfully retrieved access token with scope: %s\n",(scope))
-
-            else:
-                logging.error("Failed to retrieve token, status code: %s ",(request.status_code))
-                logging.error(request.json())
-        except Exception as e:
-            logging.error("Error in token creation: %s" % e)
-
 
 ###STARTUP###
 
@@ -74,7 +38,7 @@ print("")
 
 try:
   ntptime.settime()
-  print("UTC Time：{}".format(utime.localtime()))
+  print("UTC Time：{}\n".format(utime.localtime()))
 except Exception as e:
   logging.error("Error syncing time: %s" % e)
 

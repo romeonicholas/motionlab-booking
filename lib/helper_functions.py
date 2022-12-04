@@ -10,6 +10,33 @@ logger = logging.getLogger("api_helper_logger")
 
 ##### API FUNCTIONS #####
 
+#Returns access token required for interacting with the Cobot API
+def get_access_token(client_id, client_secret, scope, admin_email, admin_password):
+    access_token = ""
+    print("Attempting to retrieve Token with scopes: {}".format(scope))
+
+    try:
+        request = urequests.post(
+            "https://www.cobot.me/oauth/access_token?scope="
+            + scope
+            + "&grant_type=password&username="
+            + admin_email
+            + "&password="
+            + admin_password
+            + "&client_id="
+            + client_id
+            + "&client_secret="
+            + client_secret
+        ) 
+        if request.status_code == 200:
+            access_token = request.json()["access_token"]
+            print("Successfully retrieved access token with scopes: {}\n".format(scope))
+            return access_token
+        else:
+            logging.error("get_oauth_token failed withstatus code %d and response %s" % (request.status_code,request.json()))
+    except Exception as e:
+        logging.error("get_oauth_token failed with exception: %s" % e)
+
 #Returns membership id from check-in token 
 def get_membership_id(user_checkin_token, access_token):
     membership_id = ""
@@ -225,7 +252,7 @@ def configure_device():
     admin_password = input()
     print("")
     
-    full_oauth_token = Tokens(
+    access_token = get_access_token(
         client_id,
         client_secret,
         "checkin_tokens,read_bookings,write_bookings",
@@ -233,8 +260,12 @@ def configure_device():
         admin_password
     )
     
-    token_file = open('token.txt', 'w')
-    token_file.write(full_oauth_token.access_token)
-    token_file.close()
+    try:
+        token_file = open('token.txt', 'w')
+        token_file.write(access_token)
+        token_file.close()
+        print("Successfully wrote access token to token.txt\n")
+    except Exception as e:
+        logging.error("Writing access token to token.txt failed with exception %s" % e)
     
-    return full_oauth_token.access_token
+    return access_token
