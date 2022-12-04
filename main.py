@@ -2,6 +2,7 @@
 import utime
 import ntptime
 import network
+from machine import Pin #temp, remove after external audio/video cues added
 
 #External modules, sources noted in each module
 import logging
@@ -16,7 +17,7 @@ import secrets
 logging.basicConfig(filename="log_{}.txt".format(secrets.RESOURCE_ID), filemode='w', format="%(asctime)s:%(levelname)-7s:%(name)s:%(message)s")
 logger = logging.getLogger("main_logger")
 
-
+led = Pin("LED", machine.Pin.OUT)
 
 ### CLASSES ###
 
@@ -140,6 +141,7 @@ try:
             
             if stat == reader.OK:
                 #This section will only run when an acceptable RFID card is detected
+                led.on() #temp, remomve after external feedback added, turns on after badge detected
 
                 #Get check-in token from RFID badge
                 user_checkin_token = read_user_checkin_token(uid)
@@ -207,6 +209,8 @@ try:
                 else:
                     print("Membership ID is 0, can't book")
                 previous_card = uid
+                
+                led.off() #temp, remomve after external feedback added, turns off after actions post-badging are finished
             else:
                 pass
         else:
