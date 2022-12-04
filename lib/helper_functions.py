@@ -3,14 +3,16 @@ import utime
 import logging
 import urequests
 
-logging.basicConfig(format="%(asctime)s:%(levelname)-7s:%(name)s:%(message)s")
+import secrets
+
+logging.basicConfig(filename="log_{}.txt".format(secrets.RESOURCE_ID), filemode='w', format="%(asctime)s:%(levelname)-7s:%(name)s:%(message)s")
 logger = logging.getLogger("api_helper_logger")
 
 ##### API FUNCTIONS #####
 
 #Returns membership id from check-in token 
 def get_membership_id(user_checkin_token, access_token):
-    membership_id = 0
+    membership_id = ""
     
     try:
         request = urequests.get(
@@ -22,19 +24,16 @@ def get_membership_id(user_checkin_token, access_token):
 
         if request.status_code == 200:
             membership_id = request.json()["membership"]["id"]
-            print("Associated membership id: {}\n".format(membership_id))
+            print("Associated membership id: {}".format(membership_id))
         else:
-            logging.error("Getting member ID did not return 200")
-            logging.error(request.status_code)
-            logging.error(request.json())
+            logging.error("get_membership_id returned status code %d and following response: %s" % (request.status_code, request.json()))
     except Exception as e:
-        logging.error("Error in getting member ID: ", e)
+        logging.error("get_membership_id had following exception: %s", e)
         
     return membership_id
 
 def get_current_booking(resource_id, access_token):
     current_booking = {}
-    
     now = get_now()
     booking_starting_time = create_formatted_time_string(now)
     
@@ -49,7 +48,7 @@ def get_current_booking(resource_id, access_token):
     booking_ending_time = create_formatted_time_string(thirty_one_minutes_from_now)
                 
     data = {"from": booking_starting_time, "to": booking_ending_time}
-    
+
     try:
         request = urequests.get("https://members.motionlab.berlin/api/resources/"
                                 + resource_id
@@ -57,16 +56,17 @@ def get_current_booking(resource_id, access_token):
                                 + access_token,
                                 json=data)
         if request.status_code == 200:
+
             if request.json():
                 current_booking = request.json()[0]
                 print("Resource is booked: {}\n".format(current_booking))
             else:
                 print("Resource is available\n")
         else:
-            logging.error("Getting resource availability failed with the following status code: {}".format(request.status_code()))
+            logging.error("get_current_booking failed with the following status code: %d" % request.status_code())
             logging.error(request.json())
     except Exception as e:
-            logging.error("Error: ", e)
+            logging.error("get_current_booking failed following exception: %s" % e)
 
     return current_booking
 
@@ -103,11 +103,10 @@ def create_booking(membership_id, access_token, resource_id):
                                  json=data)
         if request.status_code == 201:
             print("Successfully created booking: {}\n".format(request.json()))
-        elif request.status_code == 422:
-            logging.error("Booking request failed")
-            logging.error(request.json())
+        else:
+            logging.error("create_booking with following status code %d and response: %s" % (request.status_code, request.json()))
     except Exception as e:
-            logging.error("Error: ", e)
+            logging.error("create_booking failed with following exception: %s" % e)
     return request.json()
 
 def end_booking(booking_id, access_token):
@@ -124,10 +123,10 @@ def end_booking(booking_id, access_token):
         if request.status_code == 200:
             updated_booking = request.json()
             print("Successfully ended booking early: {}\n".format(request.json()))
-        elif request.status_code == 422:
-            logging.error("Ending booking early failed\n")
+        else:
+            logging.error("end_booking failed with status code %d and response %s\n" % (request.status_code, request.json()))
     except Exception as e:
-            logging.error("Error: ", e)
+            logging.error("end_booking failed with following exception: %s" % e)
     return updated_booking
 
 def delete_booking(booking_id, access_token):
@@ -138,9 +137,9 @@ def delete_booking(booking_id, access_token):
         if request.status_code == 204:
             print("Successfully deleted booking within 5 minutes of creation\n")
         elif request.status_code == 409:
-            logging.error("Cannot delete bookings made by an event through this endpoint\n")
+            logging.error("delete_booking failed with status code 409: cannot delete a booking created by an event through this endpoint\n")
     except Exception as e:
-            logging.error("Error: ", e)
+            logging.error("delete_booking failed with following exception: %s" % e)
             
 ##### LOCAL FUNCTIONS #####
 
