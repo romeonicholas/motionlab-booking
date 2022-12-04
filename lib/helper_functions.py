@@ -2,6 +2,8 @@ import os
 import utime
 import logging
 import urequests
+import ntptime
+import network
 
 import secrets
   
@@ -38,24 +40,28 @@ def get_access_token(client_id, client_secret, scope, admin_email, admin_passwor
         logging.error("get_oauth_token failed with exception: %s" % e)
 
 #Returns membership id from check-in token 
-def get_membership_id(user_checkin_token, access_token):
+def get_membership_id(user_checkin_token, access_token, last_user_token_and_id):
     membership_id = ""
     
-    try:
-        request = urequests.get(
-            "https://members.motionlab.berlin/api/check_in_tokens/"
-            + user_checkin_token
-            + "?access_token="
-            + access_token
-        )
+    if user_checkin_token in last_user_token_and_id:
+        membership_id = last_user_token_and_id[user_checkin_token]
+        print("Membership ID was already locally available: {}\n".format(membership_id))
+    else:
+        try:
+            request = urequests.get(
+                "https://members.motionlab.berlin/api/check_in_tokens/"
+                + user_checkin_token
+                + "?access_token="
+                + access_token
+            )
 
-        if request.status_code == 200:
-            membership_id = request.json()["membership"]["id"]
-            print("Associated membership id: {}".format(membership_id))
-        else:
-            logging.error("get_membership_id returned status code %d and following response: %s" % (request.status_code, request.json()))
-    except Exception as e:
-        logging.error("get_membership_id had following exception: %s" % e)
+            if request.status_code == 200:
+                membership_id = request.json()["membership"]["id"]
+                print("Associated membership id: {}\n".format(membership_id))
+            else:
+                logging.error("get_membership_id returned status code %d and following response: %s" % (request.status_code, request.json()))
+        except Exception as e:
+            logging.error("get_membership_id had following exception: %s" % e)
         
     return membership_id
 
@@ -98,6 +104,7 @@ def get_current_booking(resource_id, access_token):
     return current_booking
 
 def create_booking(membership_id, access_token, resource_id):
+    booking = {}
     now = get_now()
     booking_starting_time = create_formatted_time_string(now)
 
@@ -129,12 +136,14 @@ def create_booking(membership_id, access_token, resource_id):
                                  + access_token,
                                  json=data)
         if request.status_code == 201:
-            print("Successfully created booking: {}\n".format(request.json()))
+            booking = request.json()
+            print("Successfully created booking: {}\n".format(booking))
         else:
             logging.error("create_booking with following status code %d and response: %s" % (request.status_code, request.json()))
     except Exception as e:
             logging.error("create_booking failed with following exception: %s" % e)
-    return request.json()
+            
+    return booking
 
 def update_booking(booking_id, access_token, start_or_end_time):
     updated_booking = {}
@@ -154,7 +163,7 @@ def update_booking(booking_id, access_token, start_or_end_time):
                                 json=data)
         if request.status_code == 200:
             updated_booking = request.json()
-            print("Successfully updated booking time: {}\n".format(request.json()))
+            print("Successfully updated booking {}: {}\n".format(start_or_end_time, updated_booking))
         else:
             logging.error("update_booking failed with status code %d and response %s\n" % (request.status_code, request.json()))
     except Exception as e:
@@ -176,7 +185,7 @@ def delete_booking(booking_id, access_token):
 ##### LOCAL FUNCTIONS #####
 
 #Returns RFID badge UID in format that matches MotionLab's checkin token format
-def read_user_checkin_token(uid):
+def get_checkin_token_from_badge(uid):
     #print(reader.tohexstring(uid))                             #e.g. [0x04, 0x0F, 0x2C, 0x82, 0xDC, 0x72, 0x80]
     #print(bytes(uid))                                          #e.g. b'\x04\x0f,\x82\xdcr\x80'
     #print(int.from_bytes(bytes(uid),"little",False))           #e.g. 36155088421261060
@@ -198,7 +207,7 @@ def read_user_checkin_token(uid):
 #    return mystring
 
 def get_now():
-    return utime.localtime(utime.time())
+    return utime.localtime()
 
 def create_formatted_time_string(unformatted_time):
     return "{}/{}/{} {}:{}:00 +0000".format(unformatted_time[0],
@@ -236,36 +245,69 @@ def is_booking_less_than_five_minutes_old(created_at):
                                                          0)))
 
 def configure_device():
-    print("Please answer the following questions to generate an OAUTH token for this client.")
-    print("None of your entered data will be stored locally, it will be deleted as soon as a token is generated.\n")
+    access_token = ""
     
-    print("Please enter the booking program's client ID (from https://www.cobot.me/oauth2_clients)")
-    client_id = input()
-    
-    print("\nPlease enter the booking program's client secret (from https://www.cobot.me/oauth2_clients)")
-    client_secret = input()
+    if file_or_dir_exists("token.txt"):
+        f = open("token.txt")
+        access_token = f.read()
+        f.close()   
+    else:
+        print("Please answer the following questions to generate an OAUTH token for this client.")
+        print("None of your entered data will be stored locally, it will be deleted as soon as a token is generated.\n")
+        
+        print("Please enter the booking program's client ID (from https://www.cobot.me/oauth2_clients)")
+        client_id = input()
+        
+        print("\nPlease enter the booking program's client secret (from https://www.cobot.me/oauth2_clients)")
+        client_secret = input()
 
-    print("\nPlease enter your MotionLab admin account email")
-    admin_email = input()
-    
-    print("\nPlease enter your MotionLab admin account password")
-    admin_password = input()
-    print("")
-    
-    access_token = get_access_token(
-        client_id,
-        client_secret,
-        "checkin_tokens,read_bookings,write_bookings",
-        admin_email,
-        admin_password
-    )
-    
-    try:
-        token_file = open('token.txt', 'w')
-        token_file.write(access_token)
-        token_file.close()
-        print("Successfully wrote access token to token.txt\n")
-    except Exception as e:
-        logging.error("Writing access token to token.txt failed with exception %s" % e)
+        print("\nPlease enter your MotionLab admin account email")
+        admin_email = input()
+        
+        print("\nPlease enter your MotionLab admin account password")
+        admin_password = input()
+        print("")
+        
+        access_token = get_access_token(
+            client_id,
+            client_secret,
+            "checkin_tokens,read_bookings,write_bookings",
+            admin_email,
+            admin_password
+        )
+        
+        try:
+            token_file = open('token.txt', 'w')
+            token_file.write(access_token)
+            token_file.close()
+            print("Successfully wrote access token to token.txt\n")
+        except Exception as e:
+            logging.error("Writing access token to token.txt failed with exception %s" % e)
     
     return access_token
+
+def connect_to_wifi():
+    print("Connecting to WiFi...")
+
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+
+    wlan.connect(secrets.SSID, secrets.SSID_PASSWORD)
+    while not wlan.isconnected():
+        utime.sleep_ms(500)
+        print(".")
+        
+    print("Connected to WiFi\n")
+    
+def set_time_to_UTC():
+    try:
+        ntptime.settime()
+        print("UTC Time：{}\n".format(utime.localtime()))
+    except Exception as e:
+        logging.error("Error syncing time: %s" % e)
+    
+def update_or_delete_booking(booking_id, access_token, onsite_booking_creation_time, update_time_limit):
+    if utime.ticks_diff(utime.ticks_ms(), onsite_booking_creation_time) < update_time_limit:
+        delete_booking(booking_id, access_token)
+    else:
+        update_booking(booking_id, access_token, "end_time")
