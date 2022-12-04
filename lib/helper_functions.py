@@ -4,7 +4,7 @@ import logging
 import urequests
 
 import secrets
-
+  
 logging.basicConfig(filename="log_{}.txt".format(secrets.RESOURCE_ID), filemode='w', format="%(asctime)s:%(levelname)-7s:%(name)s:%(message)s")
 logger = logging.getLogger("api_helper_logger")
 
@@ -28,7 +28,7 @@ def get_membership_id(user_checkin_token, access_token):
         else:
             logging.error("get_membership_id returned status code %d and following response: %s" % (request.status_code, request.json()))
     except Exception as e:
-        logging.error("get_membership_id had following exception: %s", e)
+        logging.error("get_membership_id had following exception: %s" % e)
         
     return membership_id
 
@@ -109,11 +109,16 @@ def create_booking(membership_id, access_token, resource_id):
             logging.error("create_booking failed with following exception: %s" % e)
     return request.json()
 
-def end_booking(booking_id, access_token):
+def update_booking(booking_id, access_token, start_or_end_time):
     updated_booking = {}
-    booking_ending_time = create_formatted_time_string(get_now())
-
-    data = {"to": booking_ending_time}
+    
+    data = {}
+    now = create_formatted_time_string(get_now())
+    
+    if start_or_end_time == "start_time":
+        data = {"from": now}
+    elif start_or_end_time == "end_time":
+        data = {"to": now}
         
     try:
         request = urequests.put("https://members.motionlab.berlin/api/bookings/"
@@ -122,11 +127,11 @@ def end_booking(booking_id, access_token):
                                 json=data)
         if request.status_code == 200:
             updated_booking = request.json()
-            print("Successfully ended booking early: {}\n".format(request.json()))
+            print("Successfully updated booking time: {}\n".format(request.json()))
         else:
-            logging.error("end_booking failed with status code %d and response %s\n" % (request.status_code, request.json()))
+            logging.error("update_booking failed with status code %d and response %s\n" % (request.status_code, request.json()))
     except Exception as e:
-            logging.error("end_booking failed with following exception: %s" % e)
+            logging.error("update_booking failed with following exception: %s" % e)
     return updated_booking
 
 def delete_booking(booking_id, access_token):

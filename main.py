@@ -1,5 +1,6 @@
 #Built-in modules
 import utime
+import ntptime
 import network
 
 #External modules, sources noted in each module
@@ -7,13 +8,14 @@ import logging
 from mfrc522 import MFRC522
 
 #User-created helpers and files specifically for this program
-from helper_functions import get_membership_id,get_current_booking,create_booking,end_booking,delete_booking,read_user_checkin_token,get_now,create_formatted_time_string,file_or_dir_exists,is_booking_less_than_five_minutes_old,configure_device
+from helper_functions import get_membership_id,get_current_booking,create_booking,update_booking,delete_booking,read_user_checkin_token,get_now,create_formatted_time_string,file_or_dir_exists,is_booking_less_than_five_minutes_old,configure_device
 import secrets
 
 #Due to space and security constraints, logging will only contain exceptions, not the
 #printed info messages more useful for active debugging
 logging.basicConfig(filename="log_{}.txt".format(secrets.RESOURCE_ID), filemode='w', format="%(asctime)s:%(levelname)-7s:%(name)s:%(message)s")
 logger = logging.getLogger("main_logger")
+
 
 
 ### CLASSES ###
@@ -50,7 +52,7 @@ class Tokens:
                 logging.error("Failed to retrieve token, status code: %s ",(request.status_code))
                 logging.error(request.json())
         except Exception as e:
-            logging.error("Error in token creation: ", e)
+            logging.error("Error in token creation: %s" % e)
 
 
 ###STARTUP###
@@ -68,6 +70,12 @@ while not wlan.isconnected():
     print(".")
 print("Connected to WiFi")
 print("")
+
+try:
+  ntptime.settime()
+  print("UTC Time：{}".format(utime.localtime()))
+except Exception as e:
+  logging.error("Error syncing time: %s" % e)
 
 OAUTH_TOKEN = ""
 
@@ -175,6 +183,8 @@ try:
                             
                             if is_user_checked_in_to_booking == False:
                                 is_user_checked_in_to_booking = True
+                                update_booking(current_booking["id"], OAUTH_TOKEN, "start_time")
+
                                 print("User is now checked in for their booking\n")
                                 
                                 #TODO: Show something to confirm the user has started their booking
@@ -183,7 +193,7 @@ try:
                                     #Booking is less than 5 minutes old
                                     delete_booking(current_booking["id"], OAUTH_TOKEN)
                                 else:
-                                    end_booking(current_booking["id"], OAUTH_TOKEN)
+                                    update_booking(current_booking["id"], OAUTH_TOKEN, "end_time")
 
                                 #Reset status of booking device
                                 current_booking = {}
