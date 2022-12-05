@@ -42,10 +42,10 @@ last_user_token_and_id = {} #Limits unecessary API calls when same user badges c
 membership_id = ""
 
 #Timer-related
-onsite_booking_creation_time = utime.ticks_ms() #Tracks whether enough time has passed for API ping or booking cancellation                
-availability_update_timer_start = utime.ticks_ms() #Timer for spacing out API calls to check resource availability
-#TIMER_MS = 300000 #5 minutes in MS
-TIMER_MS = 60000 #1 minute in MS
+
+onsite_booking_creation_timer_start = utime.time() #For checking whether enough time has passed for API ping or booking cancellation                
+availability_update_timer_start = utime.time() #For spacing out API calls to check resource availability
+TIMER_S = 300 #5 minutes in seconds
 
 
 ##### BEGINNING OF INTERACTABLE PROGRAM #####
@@ -56,19 +56,17 @@ try:
     #This section updates constantly until a card is detected
     while True:        
         if current_booking == {}:
-            print("There is no current booking")
-            if (utime.ticks_diff(utime.ticks_ms(), availability_update_timer_start) > TIMER_MS):
-                print("Checking for booking after given time\n")
+            if (utime.time() - availability_update_timer_start) > TIMER_S:
+                print("Checking for booking (every {} seconds)\n".format(TIMER_S))
                 current_booking = get_current_booking(secrets.RESOURCE_ID, OAUTH_TOKEN)
-                availability_update_timer_start = utime.ticks_ms()
+                availability_update_timer_start = utime.time()
                 
                 if current_booking != {}:
                     booking_end_time = get_time_from_string(current_booking["to"])
-    
+                    
         else:
-            print(utime.mktime(get_now()), booking_end_time)
-            if utime.mktime(get_now()) > booking_end_time:
-                print("Booking cleared because it's end time had been reached\n")
+            if utime.time() > booking_end_time:
+                print("Booking cleared because its end time had been reached\n")
                 current_booking = {}
 
         reader.init()
@@ -104,14 +102,13 @@ try:
                         )
                         
                         booking_end_time = get_time_from_string(current_booking["to"])
-                        #availability_update_timer_start = utime.ticks_ms()
                         
                         if current_booking == {}:
                             print("Booking creation failed\n")
                         else:
                             print("User is checked in for the booking they just created\n")
                             is_user_checked_in_to_booking = True
-                            onsite_booking_creation_time = utime.ticks_ms()
+                            onsite_booking_creation_time = utime.time()
                     else:
                         print("Resource is currently booked\n")
                         
@@ -126,7 +123,7 @@ try:
                                 #TODO: Show something to confirm the user has started their booking
                             else:
                                 print("User was already checked in for their booking, booking will be updated or deleted\n")
-                                update_or_delete_booking(current_booking["id"], OAUTH_TOKEN, onsite_booking_creation_time, TIMER_MS)
+                                update_or_delete_booking(current_booking["id"], OAUTH_TOKEN, onsite_booking_creation_time, TIMER_S)
                                 current_booking = {}
                                 is_user_checked_in_to_booking = False
                                 

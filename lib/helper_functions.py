@@ -68,19 +68,19 @@ def get_membership_id(user_checkin_token, access_token, last_user_token_and_id):
 def get_current_booking(resource_id, access_token):
     current_booking = {}
     now = get_now()
-    booking_starting_time = create_formatted_time_string(now)
+    start_of_time_range = create_formatted_time_string(now)
     
-    thirty_one_minutes_from_now = utime.localtime(utime.mktime((now[0],
-                                                                now[1],
-                                                                now[2],
-                                                                now[3],
-                                                                now[4] + 31,
-                                                                now[5],
-                                                                now[6],
-                                                                now[7])))
-    booking_ending_time = create_formatted_time_string(thirty_one_minutes_from_now)
+    one_minute_from_now = utime.localtime(utime.mktime((now[0],
+                                                        now[1],
+                                                        now[2],
+                                                        now[3],
+                                                        now[4] + 1,
+                                                        now[5],
+                                                        now[6],
+                                                        now[7])))
+    end_of_time_Range = create_formatted_time_string(one_minute_from_now)
                 
-    data = {"from": booking_starting_time, "to": booking_ending_time}
+    data = {"from": start_of_time_range, "to": end_of_time_Range}
 
     try:
         request = urequests.get("https://members.motionlab.berlin/api/resources/"
@@ -94,7 +94,7 @@ def get_current_booking(resource_id, access_token):
                 current_booking = request.json()[0]
                 print("Resource is booked: {}\n".format(current_booking))
             else:
-                print("Resource is available\n")
+                print("Resource is not currently booked\n")
         else:
             logging.error("get_current_booking failed with the following status code: %d" % request.status_code())
             logging.error(request.json())
@@ -155,7 +155,7 @@ def update_booking(booking_id, access_token, start_or_end_time):
         data = {"from": now}
     elif start_or_end_time == "end_time":
         data = {"to": now}
-        
+                
     try:
         request = urequests.put("https://members.motionlab.berlin/api/bookings/"
                                 + booking_id + "/?access_token="
@@ -320,7 +320,8 @@ def set_time_to_UTC():
         logging.error("Error syncing time: %s" % e)
     
 def update_or_delete_booking(booking_id, access_token, onsite_booking_creation_time, update_time_limit):
-    if utime.ticks_diff(utime.ticks_ms(), onsite_booking_creation_time) < update_time_limit:
+    if (utime.time() - onsite_booking_creation_time) < update_time_limit:
         delete_booking(booking_id, access_token)
     else:
         update_booking(booking_id, access_token, "end_time")
+
