@@ -118,7 +118,9 @@ try:
                             if is_user_checked_in_to_booking == False:
                                 print("User is now checked in for their booking\n")
                                 is_user_checked_in_to_booking = True
-                                update_booking(current_booking["id"], OAUTH_TOKEN, "start_time")
+                                
+                                if(utime.time() - get_time_from_string(current_booking["start_time"])) > TIMER_S:
+                                    update_booking(current_booking["id"], OAUTH_TOKEN, "start_time")
 
                                 #TODO: Show something to confirm the user has started their booking
                             else:
