@@ -210,11 +210,24 @@ def get_now():
     return utime.localtime()
 
 def create_formatted_time_string(unformatted_time):
-    return "{}/{}/{} {}:{}:00 +0000".format(unformatted_time[0],
-                                            unformatted_time[1],
-                                            unformatted_time[2],
-                                            unformatted_time[3],
-                                            unformatted_time[4])
+    return "{}/{}/{} {}:{}:00 +0000".format(unformatted_time[0], #year
+                                            unformatted_time[1], #month
+                                            unformatted_time[2], #date
+                                            unformatted_time[3], #hours
+                                            unformatted_time[4]) #minutes
+
+def get_time_from_string(time_string):
+    #2022/12/05 09:42:00 +0000 <- format of input strings
+    now = get_now()
+    new_time = utime.mktime((int(time_string[0:4]),   #year
+                             int(time_string[5:7]),   #month
+                             int(time_string[8:10]),  #date
+                             int(time_string[11:13]), #hours
+                             int(time_string[14:16]), #minutes
+                             0,   #seconds
+                             now[6],                  #weekday
+                             now[7]))                 #yearday
+    return new_time
 
 def file_or_dir_exists(filename):
     try:
