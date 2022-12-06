@@ -1,16 +1,17 @@
 #Built-in modules
 import utime
-from machine import Pin #temp, remove after external audio/video cues added
+from machine import Pin, PWM
 
 #External modules, sources noted in each module
 import logging
 from mfrc522 import MFRC522
 
-#User-created helpers and files specifically for this program
+#API functions
 from helper_functions import get_membership_id,get_current_booking,create_booking,update_booking,delete_booking,get_checkin_token_from_badge
-from helper_functions import get_now,create_formatted_time_string,get_time_from_string,file_or_dir_exists,is_booking_less_than_five_minutes_old,configure_device,set_time_to_UTC,connect_to_wifi,update_or_delete_booking
+#Local functions
+from helper_functions import get_now,create_formatted_time_string,get_time_from_string,file_or_dir_exists,is_booking_less_than_five_minutes_old,configure_device,set_time_to_UTC,connect_to_wifi,update_or_delete_booking,get_resource_availability,play_song
+#WiFi info, resource ID
 import secrets
-
 
 ##### STARTUP #####
 
@@ -20,7 +21,8 @@ logger = logging.getLogger("main_logger")
 
 #Hardware
 reader = MFRC522(spi_id=0, sck=2, miso=4, mosi=3, cs=1, rst=0)
-led = Pin("LED", machine.Pin.OUT) #temp, remove after external audio/video cues added
+led = Pin("LED", machine.Pin.OUT)
+buzzer = PWM(Pin(15))
 
 #Wifi and time
 connect_to_wifi()
@@ -29,7 +31,7 @@ set_time_to_UTC()
 #Cobot access token and current availability
 OAUTH_TOKEN = configure_device()
 current_booking = get_current_booking(secrets.RESOURCE_ID, OAUTH_TOKEN)
-#is_device_available: no current booking, no booking for next 36 minutes (30 + 5 for API refresh + 1 for wiggle room)
+is_resource_available = get_resource_availability(current_booking, secrets.RESOURCE_ID, OAUTH_TOKEN)
 
 booking_end_time = 0
 if current_booking != {}:
@@ -47,6 +49,10 @@ onsite_booking_creation_timer_start = utime.time() #For checking whether enough 
 availability_update_timer_start = utime.time() #For spacing out API calls to check resource availability
 TIMER_S = 300 #5 minutes in seconds
 
+#Frequencies for buzzer feedback
+card_read_song = [784, 784, 784]
+success_song = [440, 523, 698, 698, 698]
+error_song = [440, 196, 175, 175, 175]
 
 ##### BEGINNING OF INTERACTABLE PROGRAM #####
 
@@ -55,9 +61,11 @@ try:
 
     #This section updates constantly until a card is detected
     while True:        
+        #if is_resource_available:
         if current_booking == {}:
             if (utime.time() - availability_update_timer_start) > TIMER_S:
                 print("Checking for booking (every {} seconds)\n".format(TIMER_S))
+                #is_resource_available = get_resource_availability(current_booking, secrets.RESOURCE_ID, OAUTH_TOKEN)
                 current_booking = get_current_booking(secrets.RESOURCE_ID, OAUTH_TOKEN)
                 availability_update_timer_start = utime.time()
                 
@@ -85,6 +93,7 @@ try:
                 pass
             else:
                 #This section will only run when an acceptable RFID card is detected
+                play_song(buzzer, card_read_song)
                 led.on() #temp, remomve after external feedback added, stays on until program has finished processing badge swipe
 
                 user_checkin_token = get_checkin_token_from_badge(uid)
@@ -93,7 +102,9 @@ try:
                 
                 if membership_id is "":
                     print("Membership ID is invalid, cannot book resource\n")
+                    play_song(buzzer, error_song)
                 else:
+                    #if is_resource_available:
                     if current_booking == {}:
                         current_booking = create_booking(
                             membership_id,
@@ -105,10 +116,13 @@ try:
                         
                         if current_booking == {}:
                             print("Booking creation failed\n")
+                            play_song(buzzer, error_song)
                         else:
                             print("User is checked in for the booking they just created\n")
+                            play_song(buzzer, success_song)
                             is_user_checked_in_to_booking = True
                             onsite_booking_creation_time = utime.time()
+                            is_resource_available = False
                     else:
                         print("Resource is currently booked\n")
                         
@@ -117,6 +131,7 @@ try:
                             
                             if is_user_checked_in_to_booking == False:
                                 print("User is now checked in for their booking\n")
+                                play_song(buzzer, success_song)
                                 is_user_checked_in_to_booking = True
                                 
                                 if(utime.time() - get_time_from_string(current_booking["start_time"])) > TIMER_S:
