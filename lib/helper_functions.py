@@ -65,10 +65,36 @@ def get_membership_id(user_checkin_token, access_token, last_user_token_and_id):
         
     return membership_id
 
+def get_bookings_in_range(resource_id, access_token, time_range_start, time_range_end):
+    bookings = []
+    
+    data = {"from": time_range_start, "to": time_range_end}
+    
+    try:
+        request = urequests.get("https://members.motionlab.berlin/api/resources/"
+                                + resource_id
+                                + "/bookings?access_token="
+                                + access_token,
+                                json=data)
+        if request.status_code == 200:
+
+            if request.json():
+                bookings = request.json()
+                print("Resource is booked at some point between {} and {}: {}\n".format(time_range_start, time_range_end, current_booking))
+            else:
+                print("Resource is not booked at any point between {} and {}\n".format(time_range_start, time_range_end))
+        else:
+            logging.error("get_booking_in_range failed with the following status code: %d" % request.status_code())
+            logging.error(request.json())
+    except Exception as e:
+            logging.error("get_booking_in_range failed following exception: %s" % e)
+
+    return bookings
+
 def get_current_booking(resource_id, access_token):
     current_booking = {}
     now = get_now()
-    start_of_time_range = create_formatted_time_string(now)
+    time_range_start = create_formatted_time_string(now)
     
     one_minute_from_now = utime.localtime(utime.mktime((now[0],
                                                         now[1],
@@ -78,9 +104,9 @@ def get_current_booking(resource_id, access_token):
                                                         now[5],
                                                         now[6],
                                                         now[7])))
-    end_of_time_Range = create_formatted_time_string(one_minute_from_now)
+    time_range_end = create_formatted_time_string(one_minute_from_now)
                 
-    data = {"from": start_of_time_range, "to": end_of_time_Range}
+    data = {"from": time_range_start, "to": time_range_end}
 
     try:
         request = urequests.get("https://members.motionlab.berlin/api/resources/"
@@ -224,11 +250,36 @@ def get_time_from_string(time_string):
                              int(time_string[8:10]),  #date
                              int(time_string[11:13]), #hours
                              int(time_string[14:16]), #minutes
-                             0,   #seconds
+                             0,                       #seconds
                              now[6],                  #weekday
                              now[7]))                 #yearday
     return new_time
 
+def get_time_in_future(difference_in_minutes):
+    now = get_now()
+    time_in_future = utime.mktime((now[0],
+                                    now[1],
+                                    now[2],
+                                    now[3],
+                                    now[4] + difference_in_minutes,
+                                    now[5],
+                                    now[6],
+                                    now[7]))
+    return time_in_future
+
+def get_end_of_day_time():
+    now = get_now()
+    end_of_day = utime.mktime((now[0],
+                                now[1],
+                                now[2],
+                                20,
+                                30,
+                                0,
+                                now[6],
+                                now[7]))
+    return end_of_day
+
+#Credit: dhylands at https://forum.micropython.org/viewtopic.php?t=8112#p68368
 def file_or_dir_exists(filename):
     try:
         os.stat(filename)
@@ -325,3 +376,42 @@ def update_or_delete_booking(booking_id, access_token, onsite_booking_creation_t
     else:
         update_booking(booking_id, access_token, "end_time")
 
+def get_resource_availability(current_booking, resource_id, access_token):
+    if current_booking != {}:
+        return False
+    else:
+        start_time_range = create_formatted_time_string(utime.localtime(utime.time()))
+        end_time_range = create_formatted_time_string(utime.localtime((utime.time() + (60*30))))
+        booking_in_next_31_minutes = get_bookings_in_range(resource_id, access_token, start_time_range, end_time_range)
+        
+        if booking_in_next_31_minutes != {}:
+            return False
+        else:
+            return True
+
+#Buzzer functions
+def play_song(buzzer, song):
+    buzzer.duty_u16(1000)
+
+    for frequency in song:
+        buzzer.freq(frequency)
+        utime.sleep(0.1)
+        
+    buzzer.duty_u16(0)
+    
+def update_availability_display(pixels, resource_id, access_token):
+    time_range_start = create_formatted_time_string(utime.localtime())
+    time_range_end = create_formatted_time_string(utime.localtie(get_end_of_day))
+    
+    bookings = get_bookings_in_range(resource_id, access_token, time_range_start, time_range_end)
+    half_hour_slots_from_6_to_20_30 = [0] * 30
+    
+def set_led_lights(new_status, last_status):
+    if new_status != last_status:
+        for led in last_status:
+            led.value(0)
+        for led in new_status:
+            led.value(1)
+        
+    return new_status
+    
