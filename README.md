@@ -1,5 +1,6 @@
 # MotionLab On-Site Booking Companion
-> Currently under development
+
+![‎MotionLabBookingCompanion](https://github.com/romeonicholas/motionlab-booking/assets/79602065/f75f3d12-f0e5-4d16-a8fe-055189c38a79)
 
 ## About
 The MotionLab On-Site Booking Companion is an IoT solution custom-built for creating and updating resource bookings at hardtech coworking space [MotionLab Berlin](https://motionlab.berlin "MotionLab Berlin"). MotionLab uses [Cobot](https://www.cobot.me) to manage their members and resources, which provides a web portal for users for scheduling purposes, but provides no physical on-site support for or access to bookings. MotionLab wanted their members to be able to walk up to an available resource like a 3D printer or meeting room, swipe their member badge, and get straight to work; so I created a prototype to meet that vision. The device uses a RFID reader to identify users and manage bookings on a per-resource configurable basis, making it incredibly flexible while still easy to deploy and maintain. The Booking Companion is also cheap, made up of less than €15 of easily sourced microprocessors (the Raspberry Pi Pico W) and components. And because this device would be deployed in a business environment, special care has been taken to keep PII and sensitive data/credentials off the device in the case that a bad actor accessed or stole the device. 
